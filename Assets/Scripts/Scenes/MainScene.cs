@@ -97,7 +97,7 @@ public class MainScene : SceneBase
         while (_frameIcons.Count > Frames)
             _frameIcons.RemoveAt(0);
         while (_frameIcons.Count < Frames)
-            _frameIcons.Add(new Texture2D(64 / _texScale, 64 / _texScale) { alphaIsTransparency = false, anisoLevel = 0, filterMode = FilterMode.Point });
+            _frameIcons.Add(new Texture2D(64 / _texScale, 64 / _texScale) { anisoLevel = 0, filterMode = FilterMode.Point });
 
         while (_needRedrawIcons.Count > Frames)
             _needRedrawIcons.RemoveAt(0);
