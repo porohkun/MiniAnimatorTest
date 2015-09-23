@@ -25,7 +25,7 @@ public class Line : MonoBehaviour
             pos2 = Vertex2.transform.position;
 
         transform.position = (pos1 + pos2) / 2 + new Vector3(0f, 0f, 1f);
-        transform.localScale = new Vector3(Vector3.Distance(pos1, pos2), 3f / 8f, 1f);
+        transform.localScale = new Vector3(Vector3.Distance(pos1, pos2), Core.Glob.ZoomScale * 0.375f, 1f);
         if (pos1.y != pos2.y)
             transform.rotation = Quaternion.FromToRotation(new Vector3(1f, 0f, 0f), (pos2 - pos1).normalized);
         else

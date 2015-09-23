@@ -19,6 +19,26 @@ public class MainScene : SceneBase
     {
         FrameText.text = (Frame + 1).ToString();
         FramesText.text = string.Format("/{0}", Frames);
+
+        if (_frameIcons.Count != Frames)
+            IconCountRecalc();
+
+        for (int i = 0; i < _stripLine.Length; i++)
+        {
+            int frame = Frame + i - _stripLineCenter;
+            if (frame < 0 || frame >= Frames)
+            {
+                _stripLine[i].enabled = false;
+                _stripLineTexts[i].enabled = false;
+            }
+            else
+            {
+                _stripLine[i].enabled = true;
+                _stripLineTexts[i].enabled = true;
+                _stripLine[i].texture = _frameIcons[frame];
+                _stripLineTexts[i].text = (frame + 1).ToString();
+            }
+        }
     }
 
 
@@ -27,6 +47,9 @@ public class MainScene : SceneBase
     public ToggleGroup Tools;
     public InputField FrameDelay;
     public Toggle PlayButton;
+    public Transform StripLine;
+    public RawImage FramePrefab;
+    public RectTransform SelectorFrame;
 
     private string _currentTool = "Cursor";
     private EventSystem _eventSystem;
@@ -37,9 +60,56 @@ public class MainScene : SceneBase
     private bool _play = false;
     private float _lastTick = 0f;
 
+    private RawImage[] _stripLine;
+    private Text[] _stripLineTexts;
+    private int _stripLineCenter;
+    private List<Texture2D> _frameIcons = new List<Texture2D>();
+    private List<bool> _needRedrawIcons = new List<bool>();
+    private int _lastRedrawedIcon = 0;
+    private const int _texScale = 1;
+
+    private Color[] _emptyIcon;
+
     void Start()
     {
+        _emptyIcon = new Color[4096 / _texScale / _texScale];
+        for (int i = 0; i < 4096 / _texScale / _texScale; i++) _emptyIcon[i] = new Color(0.1f, 0.2f, 0.4f, 1f);
+
+        int icons = Mathf.FloorToInt(((float)(Screen.width - 11)) / 69);
+        int center = icons / 2;
+        _stripLine = new RawImage[icons];
+        _stripLineTexts = new Text[icons];
+        _stripLineCenter = center;
+        SelectorFrame.anchoredPosition = new Vector2(center * 69f + 3f, 3f);
+
+        for (int i = 0; i < _stripLine.Length; i++)
+        {
+            var icon = Instantiate<RawImage>(FramePrefab);
+            icon.transform.SetParent(StripLine);
+            _stripLine[i] = icon;
+            _stripLineTexts[i] = icon.GetComponentInChildren<Text>();
+        }
+        IconCountRecalc();
+    }
+
+    private void IconCountRecalc()
+    {
+        while (_frameIcons.Count > Frames)
+            _frameIcons.RemoveAt(0);
+        while (_frameIcons.Count < Frames)
+            _frameIcons.Add(new Texture2D(64 / _texScale, 64 / _texScale) { alphaIsTransparency = false, anisoLevel = 0, filterMode = FilterMode.Point });
+
+        while (_needRedrawIcons.Count > Frames)
+            _needRedrawIcons.RemoveAt(0);
+        while (_needRedrawIcons.Count < Frames)
+            _needRedrawIcons.Add(true);
+
         UpdateFramesText();
+    }
+
+    private void Redrawicon(int frame)
+    {
+        _needRedrawIcons[frame] = true;
     }
 
     public static MainScene GetInstance(Core core)
@@ -50,7 +120,6 @@ public class MainScene : SceneBase
         scene._field = core.Field;
         scene._gyzmo = core.Gyzmo;
         scene._input = scene.GetComponent<InputController>();
-        scene._input.SceneOwner = scene;
         scene._input["Fire1"].Press += scene.MouseLeftPress;
         scene._input["Fire1"].Release += scene.MouseLeftRelease;
         scene._input["Fire2"].FirstClick += scene.MouseRightClick;
@@ -182,6 +251,9 @@ public class MainScene : SceneBase
     {
         if (_play) return;
         _animation.InsertFrame(Frame);
+        Frames++;
+        for (int i = Frame; i < Frames; i++)
+            Redrawicon(i);
         OnNextFrame();
     }
 
@@ -190,6 +262,8 @@ public class MainScene : SceneBase
         if (_play) return;
         _animation.InsertFrame(Frame + 1);
         Frames++;
+        for (int i = Frame + 1; i < Frames; i++)
+            Redrawicon(i);
     }
 
     public void OnDeleteFrame()
@@ -199,6 +273,8 @@ public class MainScene : SceneBase
         if (Frame == Frames)
             Frame = 0;
         Frames--;
+        for (int i = Frame; i < Frames; i++)
+            Redrawicon(i);
         ShowFrame();
     }
 
@@ -264,6 +340,8 @@ public class MainScene : SceneBase
         vertex.Init(Frames, Frame, _field, new Vector2(pos.x, pos.y));
         vertex.transform.localScale = new Vector3(_core.ZoomScale, _core.ZoomScale, 1f);
         _animation.Vertexes.Add(vertex);
+        for (int i = 0; i < Frames; i++)
+            Redrawicon(i);
         return vertex;
     }
 
@@ -272,7 +350,9 @@ public class MainScene : SceneBase
         var line = GameObject.Instantiate<Line>(Line.Prefab);
         line.Vertex1 = vertex1;
         line.transform.parent = _field;
-        line.transform.localScale = new Vector3(line.transform.localScale.x, _core.ZoomScale*0.375f, 1f);
+        line.transform.localScale = new Vector3(line.transform.localScale.x, _core.ZoomScale * 0.375f, 1f);
+        for (int i = 0; i < Frames; i++)
+            Redrawicon(i);
         return line;
     }
 
@@ -291,12 +371,16 @@ public class MainScene : SceneBase
             GameObject.Destroy(line.gameObject);
         }
         _gyzmo.UpdatePosition(_selectedVertexes);
+        for (int i = 0; i < Frames; i++)
+            Redrawicon(i);
     }
 
     private void ClearAnimation()
     {
         DestroyVertexes(_animation.Vertexes);
         PlayButton.isOn = false;
+        for (int i = 0; i < Frames; i++)
+            Redrawicon(i);
     }
 
     private void LoadAnimaton(string filename)
@@ -315,6 +399,8 @@ public class MainScene : SceneBase
             line.transform.SetParent(_field);
             line.transform.localScale = new Vector3(line.transform.localScale.x, _core.ZoomScale * 0.375f, 1f);
         }
+        for (int i = 0; i < Frames; i++)
+            Redrawicon(i);
         ShowFrame();
     }
 
@@ -517,6 +603,49 @@ public class MainScene : SceneBase
                 OnNextFrame(true);
                 _lastTick = time;
             }
+        }
+
+        int index = _lastRedrawedIcon + 1;
+        if (index >= Frames) index = 0;
+        while (!_needRedrawIcons[index] && index!=_lastRedrawedIcon)
+        {
+            index++;
+            if (index >= Frames) index = 0;
+        }
+        if (_needRedrawIcons[index])
+        {
+            var texture = _frameIcons[index];
+            texture.SetPixels(_emptyIcon);
+            foreach (var vertex in _animation.Vertexes)
+                texture.SetPixel(Mathf.FloorToInt(vertex[index].x / _texScale), Mathf.FloorToInt(vertex[index].y / _texScale), new Color(0.5f, 0.5f, 1f));
+
+            foreach (var line in _animation.Lines)
+            {
+                float x1 = Mathf.Floor(line.Vertex1[index].x / _texScale);
+                float x2 = Mathf.Floor(line.Vertex2[index].x / _texScale);
+                float y1 = Mathf.Floor(line.Vertex1[index].y / _texScale);
+                float y2 = Mathf.Floor(line.Vertex2[index].y / _texScale);
+                float minX = Mathf.Min(x1, x2);
+                float maxX = Mathf.Max(x1, x2);
+                float minY = Mathf.Min(y1, y2);
+                float maxY = Mathf.Max(y1, y2);
+
+                float mod = (y2 - y1) / (x2 - x1);
+                float yy = mod > 0f ? minY : maxY;
+
+                for (float x = 0f; x < Mathf.Max(x1, x2) - minX; x++)
+                    texture.SetPixel(Mathf.FloorToInt(x + minX), Mathf.FloorToInt(x * mod + yy), new Color(0.5f, 0.5f, 1f));
+
+                mod = 1f / mod;
+                float xx = mod > 0f ? minX : maxX;
+
+                for (float y = 0f; y < Mathf.Max(y1, y2) - minY; y++)
+                    texture.SetPixel(Mathf.FloorToInt(y * mod + xx), Mathf.FloorToInt(y + minY), new Color(0.5f, 0.5f, 1f));
+
+            }
+
+            texture.Apply();
+            _lastRedrawedIcon = index;
         }
     }
 }
