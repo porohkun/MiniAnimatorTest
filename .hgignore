@@ -1,0 +1,10 @@
+.suo
+.suo.meta
+.user
+.user.meta
+.sln.docstates
+.cspkg
+
+^Library
+^Temp
+^obj
